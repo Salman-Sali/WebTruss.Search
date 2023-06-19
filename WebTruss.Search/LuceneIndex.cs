@@ -10,13 +10,13 @@ using System.Text.RegularExpressions;
 
 namespace WebTruss.Search
 {
-    public class LuceneSearch<T> where T : class
+    public class LuceneIndex<T> where T : class
     {
         private readonly Directory directory;
 
         private readonly LuceneIndexConfig config;
 
-        public LuceneSearch(LuceneIndexConfig config)
+        public LuceneIndex(LuceneIndexConfig config)
         {
             this.config = config;
             directory = FSDirectory.Open(new System.IO.DirectoryInfo(config.Path));
@@ -57,14 +57,14 @@ namespace WebTruss.Search
                 {
                     document.Add(new Field(property.Name, value, propertyConfig.Store, propertyConfig.Index));
                 }
+            }
 
-                using (Analyzer analyzer = new StandardAnalyzer(Lucene.Net.Util.Version.LUCENE_30))
-                using (var writer = new IndexWriter(directory, analyzer, new IndexWriter.MaxFieldLength(1000)))
-                {
-                    writer.AddDocument(document);
-                    writer.Optimize();
-                    writer.Flush(true, true, true);
-                }
+            using (Analyzer analyzer = new StandardAnalyzer(Lucene.Net.Util.Version.LUCENE_30))
+            using (var writer = new IndexWriter(directory, analyzer, new IndexWriter.MaxFieldLength(1000)))
+            {
+                writer.AddDocument(document);
+                writer.Optimize();
+                writer.Flush(true, true, true);
             }
         }
 
@@ -104,7 +104,7 @@ namespace WebTruss.Search
         {
             var results = new List<T>();
 
-            var rawQuery = (searchConfig.Fuzzy ? "~" : string.Empty) + FixQuery(searchConfig.Query);
+            var rawQuery = FixQuery(searchConfig.Query) + (searchConfig.Fuzzy ? "~" : string.Empty);
             using (var reader = IndexReader.Open(directory, true))
             using (var searcher = new IndexSearcher(reader))
             {
@@ -112,7 +112,7 @@ namespace WebTruss.Search
                 {
                     var queryParser = new QueryParser(Lucene.Net.Util.Version.LUCENE_30, searchConfig.TargetProperty, analyzer);
                     var query = queryParser.Parse(rawQuery);
-                    var collector = TopScoreDocCollector.Create(1000, true);
+                    var collector = TopScoreDocCollector.Create(searchConfig.Count, true);
                     searcher.Search(query, collector);
                     var matches = collector.TopDocs().ScoreDocs;
                     foreach (var match in matches)
