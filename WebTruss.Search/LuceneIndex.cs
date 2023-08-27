@@ -62,8 +62,8 @@ namespace WebTruss.Search
             {
                 throw new Exception("Supplied key property not found.");
             }
-
-            document.Add(new StringField(keyProperty.Name, keyProperty.GetValue(data)!.ToString(), Field.Store.YES));
+            var keyPropertyValue = keyProperty.GetValue(data)!.ToString();
+            document.Add(new StringField(keyProperty.Name, keyPropertyValue, Field.Store.YES));
             foreach (var property in typeof(T)
                 .GetProperties()
                 .Where(a => a.Name != config.KeyPropertyName && config.PropertyConfigs.Select(a => a.Name).Contains(a.Name))
@@ -96,6 +96,7 @@ namespace WebTruss.Search
                 var config = new IndexWriterConfig(version, analyzer);
                 using (var writer = new IndexWriter(directory, config))
                 {
+                    writer.DeleteDocuments(new Term(this.config.KeyPropertyName, keyPropertyValue));
                     writer.AddDocument(document);
                     writer.Flush(true, true);
                 }
