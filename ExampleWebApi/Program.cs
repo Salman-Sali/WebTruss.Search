@@ -17,12 +17,12 @@ var bookIndexConfig = new LuceneIndexConfig
     Path = "C:\\Users\\salma\\Desktop\\Lucene",
     PropertyConfigs = new List<LuceneIndexConfig.PropertyConfig>
     {
-        new LuceneIndexConfig.PropertyConfig(nameof(Book.Title), Field.Store.YES, Field.Index.ANALYZED),
-        new LuceneIndexConfig.PropertyConfig(nameof(Book.Description), Field.Store.YES, Field.Index.NO),
-        new LuceneIndexConfig.PropertyConfig(nameof(Book.Author), Field.Store.YES, Field.Index.ANALYZED),
-        new LuceneIndexConfig.PropertyConfig(nameof(Book.ISBN), Field.Store.YES, Field.Index.NOT_ANALYZED),
+        new LuceneIndexConfig.PropertyConfig(nameof(Book.Title), true),
+        new LuceneIndexConfig.PropertyConfig(nameof(Book.Description), false),
+        new LuceneIndexConfig.PropertyConfig(nameof(Book.Author), true),
+        new LuceneIndexConfig.PropertyConfig(nameof(Book.ISBN), false),
     }
-};
+};;
 var bookIndex = new LuceneIndex<Book>(bookIndexConfig);
 
 builder.Services.AddSingleton(bookIndex);

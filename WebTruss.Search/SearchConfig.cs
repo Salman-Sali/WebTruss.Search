@@ -10,7 +10,17 @@
         /// <summary>
         /// Set true to enable fuzzy search. 
         /// </summary>
-        public bool Fuzzy { get; set; } = false;
+        public bool Fuzzy { get; set; } = true;
+
+        /// <summary>
+        /// "*query"
+        /// </summary>
+        public bool BeginWildCard { get; set; } = false;
+
+        /// <summary>
+        /// "qurey*"
+        /// </summary>
+        public bool EndWildCard { get; set; } = true;
 
         /// <summary>
         /// The property which the Query targets.

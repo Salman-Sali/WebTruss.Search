@@ -32,10 +32,9 @@ namespace WebTruss.Search
 
         public class PropertyConfig
         {
-            public PropertyConfig(string name, Field.Store store, Field.Index index)
+            public PropertyConfig(string name, bool index)
             {
                 Name = name;
-                Store = store;
                 Index = index;
             }
 
@@ -45,13 +44,9 @@ namespace WebTruss.Search
             public string Name { get; set; } = null!;
 
             /// <summary>
-            /// Similar to Included Columns concept of Ms-Sql. 
-            /// When value is YES, data is stored along with the index and thus can be returned as part of the search result.
-            /// When value is NO, the property value cannot be fetched along with search reuslt but can be fetched by using Get(ByKey) method.
+            /// True if you want to perform search on this field
             /// </summary>
-            public Field.Store Store { get; set; }
-
-            public Field.Index Index { get; set; }
+            public bool Index { get; set; }
         }
     }
 }

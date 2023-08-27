@@ -63,7 +63,7 @@ namespace WebTruss.Search
                 throw new Exception("Supplied key property not found.");
             }
 
-            document.Add(new Field(keyProperty.Name, keyProperty.GetValue(data)!.ToString(), Field.Store.YES, Field.Index.NOT_ANALYZED));
+            document.Add(new StringField(keyProperty.Name, keyProperty.GetValue(data)!.ToString(), Field.Store.YES));
             foreach (var property in typeof(T)
                 .GetProperties()
                 .Where(a => a.Name != config.KeyPropertyName && config.PropertyConfigs.Select(a => a.Name).Contains(a.Name))
@@ -76,13 +76,17 @@ namespace WebTruss.Search
                     value = property!.GetValue(data)!.ToString()!;
                 }
 
-                if (propertyConfig == null)
+                if (propertyConfig != null)
                 {
-                    document.Add(new Field(property.Name, value, Field.Store.YES, Field.Index.NO));
-                }
-                else
-                {
-                    document.Add(new Field(property.Name, value, propertyConfig.Store, propertyConfig.Index));
+                    if (propertyConfig.Index)
+                    {
+                        document.Add(new TextField(property.Name, value, Field.Store.YES));
+                    }
+                    else
+                    {
+                        document.Add(new StringField(property.Name, value, Field.Store.YES));
+                    }
+
                 }
             }
 
@@ -149,6 +153,11 @@ namespace WebTruss.Search
                     var parts = rawQuery.Split(' ');
                     foreach (var item in parts)
                     {
+                        if (searchConfig.BeginWildCard || searchConfig.EndWildCard)
+                        {
+                            var wildcardQuery = (searchConfig.BeginWildCard ? "*" : string.Empty) + (searchConfig.EndWildCard ? item + '*' : item);
+                            query.Add(new WildcardQuery(new Term(searchConfig.TargetProperty, wildcardQuery)), Occur.SHOULD);
+                        }
                         if (searchConfig.Fuzzy)
                         {
                             query.Add(new FuzzyQuery(new Term(searchConfig.TargetProperty, item)), Occur.SHOULD);
