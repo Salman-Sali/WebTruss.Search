@@ -15,7 +15,7 @@ namespace WebTruss.Search
 {
     public class LuceneIndex<T> where T : class
     {
-        private readonly Directory directory;
+        private Directory directory;
 
         private readonly LuceneIndexConfig config;
 
@@ -24,22 +24,27 @@ namespace WebTruss.Search
         public LuceneIndex(LuceneIndexConfig config)
         {
             this.config = config;
+            ChangeDirectoryPath(config.Path);
+        }
+
+        public void ChangeDirectoryPath(string path)
+        {
             switch (config.DirectoryImplementation)
             {
                 case DirectoryImplementation.FSDirectory:
-                    directory = FSDirectory.Open(new System.IO.DirectoryInfo(config.Path));
+                    directory = FSDirectory.Open(new System.IO.DirectoryInfo(path));
                     break;
 
                 case DirectoryImplementation.NIOFSDirectory:
-                    directory = NIOFSDirectory.Open(new System.IO.DirectoryInfo(config.Path));
+                    directory = NIOFSDirectory.Open(new System.IO.DirectoryInfo(path));
                     break;
 
                 case DirectoryImplementation.SimpleFSDirectory:
-                    directory = SimpleFSDirectory.Open(new System.IO.DirectoryInfo(config.Path));
+                    directory = SimpleFSDirectory.Open(new System.IO.DirectoryInfo(path));
                     break;
 
                 case DirectoryImplementation.MMapDirectory:
-                    directory = MMapDirectory.Open(new System.IO.DirectoryInfo(config.Path));
+                    directory = MMapDirectory.Open(new System.IO.DirectoryInfo(path));
                     break;
             }
         }
