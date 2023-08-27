@@ -4,9 +4,12 @@ using Lucene.Net.Documents;
 using Lucene.Net.Index;
 using Lucene.Net.Store;
 using Directory = Lucene.Net.Store.Directory;
-using Lucene.Net.QueryParsers;
 using Lucene.Net.Search;
 using System.Text.RegularExpressions;
+using System;
+using Lucene.Net.Util;
+using System.Globalization;
+using System.Text;
 
 namespace WebTruss.Search
 {
@@ -16,10 +19,29 @@ namespace WebTruss.Search
 
         private readonly LuceneIndexConfig config;
 
+        private static LuceneVersion version = Lucene.Net.Util.LuceneVersion.LUCENE_48;
+
         public LuceneIndex(LuceneIndexConfig config)
         {
             this.config = config;
-            directory = FSDirectory.Open(new System.IO.DirectoryInfo(config.Path));
+            switch (config.DirectoryImplementation)
+            {
+                case DirectoryImplementation.FSDirectory:
+                    directory = FSDirectory.Open(new System.IO.DirectoryInfo(config.Path));
+                    break;
+
+                case DirectoryImplementation.NIOFSDirectory:
+                    directory = NIOFSDirectory.Open(new System.IO.DirectoryInfo(config.Path));
+                    break;
+
+                case DirectoryImplementation.SimpleFSDirectory:
+                    directory = SimpleFSDirectory.Open(new System.IO.DirectoryInfo(config.Path));
+                    break;
+
+                case DirectoryImplementation.MMapDirectory:
+                    directory = MMapDirectory.Open(new System.IO.DirectoryInfo(config.Path));
+                    break;
+            }
         }
 
         /// <summary>
@@ -39,7 +61,7 @@ namespace WebTruss.Search
             document.Add(new Field(keyProperty.Name, keyProperty.GetValue(data)!.ToString(), Field.Store.YES, Field.Index.NOT_ANALYZED));
             foreach (var property in typeof(T)
                 .GetProperties()
-                .Where(a => a.Name != config.KeyPropertyName && config.PropertyConfigs.Select(a=>a.Name).Contains(a.Name))
+                .Where(a => a.Name != config.KeyPropertyName && config.PropertyConfigs.Select(a => a.Name).Contains(a.Name))
                 .ToList())
             {
                 var propertyConfig = config.PropertyConfigs.Where(a => a.Name == property.Name).FirstOrDefault();
@@ -59,12 +81,15 @@ namespace WebTruss.Search
                 }
             }
 
-            using (Analyzer analyzer = new StandardAnalyzer(Lucene.Net.Util.Version.LUCENE_30))
-            using (var writer = new IndexWriter(directory, analyzer, new IndexWriter.MaxFieldLength(1000)))
+
+            using (Analyzer analyzer = new StandardAnalyzer(version))
             {
-                writer.AddDocument(document);
-                writer.Optimize();
-                writer.Flush(true, true, true);
+                var config = new IndexWriterConfig(version, analyzer);
+                using (var writer = new IndexWriter(directory, config))
+                {
+                    writer.AddDocument(document);
+                    writer.Flush(true, true);
+                }
             }
         }
 
@@ -76,22 +101,26 @@ namespace WebTruss.Search
         public void Delete(string key)
         {
             var idTerm = new Term(config.KeyPropertyName, key);
-            using (Analyzer analyzer = new StandardAnalyzer(Lucene.Net.Util.Version.LUCENE_30))
-            using (var writer = new IndexWriter(directory, analyzer, new IndexWriter.MaxFieldLength(1000)))
+            using (Analyzer analyzer = new StandardAnalyzer(version))
             {
-                try
+                var config = new IndexWriterConfig(version, analyzer);
+                using (var writer = new IndexWriter(directory, config))
                 {
-                    writer.DeleteDocuments(idTerm);
+                    try
+                    {
+                        writer.DeleteDocuments(idTerm);
+                    }
+                    catch (OutOfMemoryException e)
+                    {
+                        writer.Dispose();
+                        throw e;
+                    }
+                    catch
+                    {
+                        throw;
+                    }
                 }
-                catch (OutOfMemoryException e)
-                {
-                    writer.Dispose();
-                    throw e;
-                }
-                catch
-                {
-                    throw;
-                }
+
             }
         }
 
@@ -104,35 +133,46 @@ namespace WebTruss.Search
         {
             var results = new List<T>();
 
-            var rawQuery = FixQuery(searchConfig.Query) + (searchConfig.Fuzzy ? "~" : string.Empty);
-            using (var reader = IndexReader.Open(directory, true))
-            using (var searcher = new IndexSearcher(reader))
+            var rawQuery = FixQuery(searchConfig.Query);
+            using (var reader = DirectoryReader.Open(directory))
             {
-                using (Analyzer analyzer = new StandardAnalyzer(Lucene.Net.Util.Version.LUCENE_30))
+                var searcher = new IndexSearcher(reader);
+                using (Analyzer analyzer = new StandardAnalyzer(version))
                 {
-                    var queryParser = new QueryParser(Lucene.Net.Util.Version.LUCENE_30, searchConfig.TargetProperty, analyzer);
-                    var query = queryParser.Parse(rawQuery);
-                    var collector = TopScoreDocCollector.Create(searchConfig.Count, true);
-                    searcher.Search(query, collector);
-                    var matches = collector.TopDocs().ScoreDocs;
+
+                    var query = new BooleanQuery();
+                    var parts = rawQuery.Split(' ');
+                    foreach (var item in parts)
+                    {
+                        if (searchConfig.Fuzzy)
+                        {
+                            query.Add(new FuzzyQuery(new Term(searchConfig.TargetProperty, item)), Occur.SHOULD);
+                        }
+                        else
+                        {
+                            query.Add(new TermQuery(new Term(searchConfig.TargetProperty, item)), Occur.SHOULD);
+                        }
+                    }
+
+                    var matches = searcher.Search(query, searchConfig.Count).ScoreDocs;
                     foreach (var match in matches)
                     {
                         var doc = searcher.Doc(match.Doc);
                         var resultItem = (T)Activator.CreateInstance(typeof(T))!;
-                        foreach (var field in doc.GetFields())
+                        foreach (var field in doc.Fields)
                         {
-                            var property = typeof(T).GetProperties().Where(a=>a.Name == field.Name).FirstOrDefault();
-                            if(property == null)
+                            var property = typeof(T).GetProperties().Where(a => a.Name == field.Name).FirstOrDefault();
+                            if (property == null)
                             {
                                 continue;
                             }
                             if (property.PropertyType == typeof(Guid))
                             {
-                                property.SetValue(resultItem, Guid.Parse(field.StringValue));
+                                property.SetValue(resultItem, Guid.Parse(field.GetStringValue()));
                             }
                             else
                             {
-                                property.SetValue(resultItem, Convert.ChangeType(field.StringValue, property.PropertyType));
+                                property.SetValue(resultItem, Convert.ChangeType(field.GetStringValue(), property.PropertyType));
                             }
                         }
                         results.Add(resultItem);
@@ -145,7 +185,23 @@ namespace WebTruss.Search
         private string FixQuery(string query)
         {
             query = Regex.Replace(query, "[!-\\/:-@[-`{-~]", "");
-            return query.TrimEnd();
+            return CleanSearchTerm(query.TrimEnd());
+        }
+
+        private static string CleanSearchTerm(string query)
+        {
+            if (string.IsNullOrEmpty(query))
+                return query;
+
+            //replace double spaces and the asterix
+            query = query.Trim().Replace("  ", " ").Replace("*", "");
+
+            //replace special characters
+            var decomposed = query.Normalize(NormalizationForm.FormD);
+            var filtered = decomposed.Where(c => char.GetUnicodeCategory(c) != UnicodeCategory.NonSpacingMark);
+
+            //return the new string
+            return new string(filtered.ToArray()).ToLower();
         }
     }
 }

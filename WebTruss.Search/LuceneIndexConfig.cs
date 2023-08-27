@@ -21,6 +21,11 @@ namespace WebTruss.Search
         public string KeyPropertyName { get; set; } = null!;
 
         /// <summary>
+        /// Select type of directory implemenation. Default = FSDirectory (Windows)
+        /// </summary>
+        public DirectoryImplementation DirectoryImplementation { get; set; } = DirectoryImplementation.FSDirectory;
+
+        /// <summary>
         /// Except key, only properties whose propertyConfig has been provided will be stored/indexed.
         /// </summary>
         public List<PropertyConfig> PropertyConfigs { get; set; } = null!;
